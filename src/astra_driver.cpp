@@ -506,6 +506,16 @@ void AstraDriver::newDepthFrameCallback(sensor_msgs::ImagePtr image)
     {
       image->header.stamp = image->header.stamp + depth_time_offset_;
 
+      //TODO Update to robots setting as parameters boolean and pixels to filter
+      bool camera_bug_line_artifact_fix = true;
+      if (camera_bug_line_artifact_fix)
+      {
+    	  uint16_t* data = reinterpret_cast<uint16_t*>(&image->data[0]);
+    	  for (unsigned int i = 0; i < image->width * image->height; ++i)
+    		  if (i%image->width < 10)
+    			  data[i] = 0;
+      }
+
       if (z_offset_mm_ != 0)
       {
         uint16_t* data = reinterpret_cast<uint16_t*>(&image->data[0]);
