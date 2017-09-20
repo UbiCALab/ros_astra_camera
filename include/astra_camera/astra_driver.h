@@ -71,6 +71,7 @@ private:
   void newIRFrameCallback(sensor_msgs::ImagePtr image);
   void newColorFrameCallback(sensor_msgs::ImagePtr image);
   void newDepthFrameCallback(sensor_msgs::ImagePtr image);
+  void minDepthFrameCallback(sensor_msgs::ImagePtr image);
 
   // Methods to get calibration parameters for the various cameras
   sensor_msgs::CameraInfoPtr getDefaultCameraInfo(int width, int height, double f) const;
@@ -141,6 +142,9 @@ private:
   std::string depth_frame_id_ ;
 
   std::string color_info_url_, ir_info_url_;
+
+  float crop_corners_right_, crop_corners_left_, crop_corners_top_, crop_corners_bottom_;
+  float crop_frame_right_, crop_frame_left_, crop_frame_top_, crop_frame_bottom_;
 
   bool color_depth_synchronization_;
   bool depth_registration_;

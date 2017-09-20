@@ -43,6 +43,11 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/thread.hpp>
 
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui_c.h>
+#include <cv_bridge/cv_bridge.h>
+
 #define  MULTI_ASTRA 1
 namespace astra_wrapper
 {
@@ -506,15 +511,27 @@ void AstraDriver::newDepthFrameCallback(sensor_msgs::ImagePtr image)
     {
       image->header.stamp = image->header.stamp + depth_time_offset_;
 
-      //TODO Update to robots setting as parameters boolean and pixels to filter
-      bool camera_bug_line_artifact_fix = true;
-      if (camera_bug_line_artifact_fix)
-      {
-    	  uint16_t* data = reinterpret_cast<uint16_t*>(&image->data[0]);
-    	  for (unsigned int i = 0; i < image->width * image->height; ++i)
-    		  if (i%image->width < 10)
-    			  data[i] = 0;
-      }
+	  uint16_t* data = reinterpret_cast<uint16_t*>(&image->data[0]);
+
+	  for (unsigned int i = 0; i < image->width * image->height; ++i) {
+		  //BUG: remove line artifact
+		  if (i%image->width < crop_frame_left_)
+			  data[i] = 0;
+		  if (i%image->width > (image->width - crop_frame_right_))
+			  data[i] = 0;
+		  if (i/image->width < crop_frame_top_)
+			  data[i] = 0;
+		  if (i/image->width > (image->width - crop_frame_bottom_))
+			  data[i] = 0;
+		  if (i%image->width < crop_corners_left_ && (i/image->width) < crop_corners_top_)
+			  data[i] = 0;
+		  if (i%image->width < crop_corners_left_ && (i/image->width) > (image->width - crop_corners_bottom_))
+			  data[i] = 0;
+		  if (i%image->width > (image->width - crop_corners_right_) && (i/image->width) < crop_corners_top_)
+			  data[i] = 0;
+		  if (i%image->width > (image->width - crop_corners_right_) && (i/image->width) > (image->width - crop_corners_bottom_))
+			  data[i] = 0;
+	  }
 
       if (z_offset_mm_ != 0)
       {
@@ -537,11 +554,11 @@ void AstraDriver::newDepthFrameCallback(sensor_msgs::ImagePtr image)
       if (depth_registration_)
       {
         image->header.frame_id = color_frame_id_;
-        cam_info = getColorCameraInfo(image->width,image->height, image->header.stamp);
+        cam_info = getColorCameraInfo(image->width, image->height, image->header.stamp);
       } else
       {
         image->header.frame_id = depth_frame_id_;
-        cam_info = getDepthCameraInfo(image->width,image->height, image->header.stamp);
+        cam_info = getDepthCameraInfo(image->width, image->height, image->header.stamp);
       }
 
       if (depth_raw_subscribers_)
@@ -686,6 +703,16 @@ void AstraDriver::readConfigFromParameterServer()
 
   pnh_.param("rgb_camera_info_url", color_info_url_, std::string());
   pnh_.param("depth_camera_info_url", ir_info_url_, std::string());
+
+  pnh_.param("crop_corners/right", crop_corners_right_, float(0));
+  pnh_.param("crop_corners/left", crop_corners_left_, float(0));
+  pnh_.param("crop_corners/top", crop_corners_top_, float(0));
+  pnh_.param("crop_corners/bottom", crop_corners_bottom_, float(0));
+
+  pnh_.param("crop_frame/right", crop_frame_right_, float(0));
+  pnh_.param("crop_frame/left", crop_frame_left_, float(0));
+  pnh_.param("crop_frame/top", crop_frame_top_, float(0));
+  pnh_.param("crop_frame/bottom", crop_frame_bottom_, float(0));
 
 }
 
