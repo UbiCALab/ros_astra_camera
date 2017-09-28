@@ -48,6 +48,9 @@
 #include <opencv2/highgui/highgui_c.h>
 #include <cv_bridge/cv_bridge.h>
 
+#include <std_msgs/Float32MultiArray.h>
+#include <numeric>
+
 #define  MULTI_ASTRA 1
 namespace astra_wrapper
 {
@@ -189,6 +192,8 @@ void AstraDriver::advertiseROSTopics()
     pub_depth_raw_ = depth_it.advertiseCamera("image_raw", 1, itssc, itssc, rssc, rssc);
     pub_depth_ = depth_raw_it.advertiseCamera("image", 1, itssc, itssc, rssc, rssc);
   }
+
+  pub_corners_averge_ = pnh_.advertise<std_msgs::Float32MultiArray>("corners_average", 100);
 
   ////////// CAMERA INFO MANAGER
 
@@ -502,6 +507,7 @@ void AstraDriver::newColorFrameCallback(sensor_msgs::ImagePtr image)
 
 void AstraDriver::newDepthFrameCallback(sensor_msgs::ImagePtr image)
 {
+
   if ((++data_skip_depth_counter_)%data_skip_==0)
   {
 
@@ -509,29 +515,112 @@ void AstraDriver::newDepthFrameCallback(sensor_msgs::ImagePtr image)
 
     if (depth_raw_subscribers_||depth_subscribers_)
     {
+
+      cv::Mat in_image = cv_bridge::toCvShare(image, sensor_msgs::image_encodings::TYPE_32FC1)->image;
+	  //ROS_INFO("%d", in_image.rows);
+	  //ROS_INFO("%d", in_image.cols);
+	  //ROS_INFO("%f", in_image.at<float_t>(320,480));
+
       image->header.stamp = image->header.stamp + depth_time_offset_;
 
 	  uint16_t* data = reinterpret_cast<uint16_t*>(&image->data[0]);
 
+	  std::vector<uint64_t> top_right, top_left, bottom_right, bottom_left;
+
+	  float offset = 50;
+	  uint16_t row;
+	  uint16_t column;
 	  for (unsigned int i = 0; i < image->width * image->height; ++i) {
-		  //BUG: remove line artifact
-		  if (i%image->width < crop_frame_left_)
-			  data[i] = 0;
-		  if (i%image->width > (image->width - crop_frame_right_))
-			  data[i] = 0;
-		  if (i/image->width < crop_frame_top_)
-			  data[i] = 0;
-		  if (i/image->width > (image->width - crop_frame_bottom_))
-			  data[i] = 0;
-		  if (i%image->width < crop_corners_left_ && (i/image->width) < crop_corners_top_)
-			  data[i] = 0;
-		  if (i%image->width < crop_corners_left_ && (i/image->width) > (image->width - crop_corners_bottom_))
-			  data[i] = 0;
-		  if (i%image->width > (image->width - crop_corners_right_) && (i/image->width) < crop_corners_top_)
-			  data[i] = 0;
-		  if (i%image->width > (image->width - crop_corners_right_) && (i/image->width) > (image->width - crop_corners_bottom_))
-			  data[i] = 0;
+
+		  row = ceil(i/image->width);
+		  column = ceil(i%image->width);
+
+		  if (i%image->width < crop_corners_left_ &&
+				  i%image->width > crop_corners_left_ - offset &&
+				  (i/image->width) < crop_corners_top_ &&
+				  (i/image->width) > crop_corners_top_ - offset) {
+				  top_left.push_back(in_image.at<float_t>(row,column));
+				  data[i] = 0;
+			  }
+
+			  if (i%image->width < crop_corners_left_ &&
+					  i%image->width > crop_corners_left_ - offset &&
+					  (i/image->width) > (image->width - crop_corners_bottom_) &&
+					  (i/image->width) < (image->width - crop_corners_bottom_) + offset ) {
+				  bottom_left.push_back(in_image.at<float_t>(row,column));
+				  data[i] = 0;
+			  }
+
+			  if (i%image->width > (image->width - crop_corners_right_) &&
+					  i%image->width < (image->width - crop_corners_right_) + offset &&
+					  (i/image->width) < crop_corners_top_ &&
+					  (i/image->width) > crop_corners_top_ - offset) {
+				  top_right.push_back(in_image.at<float_t>(row,column));
+				  data[i] = 0;
+			  }
+			  if (i%image->width > (image->width - crop_corners_right_) &&
+					  i%image->width < (image->width - crop_corners_right_) + offset &&
+					  (i/image->width) > (image->width - crop_corners_bottom_) &&
+					  (i/image->width) < (image->width - crop_corners_bottom_) + offset){
+				  bottom_right.push_back(in_image.at<float_t>(row,column));
+				  data[i] = 0;
+			  }
+
+//		  //remove frame
+//		  if (i%image->width < crop_frame_left_)
+//			  data[i] = 0;
+//		  if (i%image->width > (image->width - crop_frame_right_))
+//			  data[i] = 0;
+//		  if (i/image->width < crop_frame_top_)
+//			  data[i] = 0;
+//		  if (i/image->width > (image->width - crop_frame_bottom_))
+//			  data[i] = 0;
+
+//		  //remove corners
+//
+//		  if (i%image->width < crop_corners_left_ && (i/image->width) < crop_corners_top_) {
+//			  data[i] = 0;
+//		  }
+//
+//		  if (i%image->width < crop_corners_left_ && (i/image->width) > (image->width - crop_corners_bottom_)) {
+//			  data[i] = 0;
+//		  }
+//
+//		  if (i%image->width > (image->width - crop_corners_right_) && (i/image->width) < crop_corners_top_) {
+//			  data[i] = 0;
+//		  }
+//		  if (i%image->width > (image->width - crop_corners_right_) && (i/image->width) > (image->width - crop_corners_bottom_)){
+//			  data[i] = 0;
+//		  }
+
 	  }
+
+      uint64_t sum;
+      float_t avg;
+	  std_msgs::Float32MultiArray corners_averages;
+
+      sum = std::accumulate(top_left.begin(), top_left.end(), 0.0);
+      //ROS_INFO("%lu", sum);
+      avg = float(sum)/float(top_left.size());
+      //ROS_INFO("Top left: %f", avg);
+	  corners_averages.data.push_back(avg);
+
+      sum = std::accumulate(top_right.begin(), top_right.end(), 0.0);
+      avg = float(sum)/float(top_right.size());
+      //ROS_INFO("Top right: %f", avg);
+      corners_averages.data.push_back(avg);
+
+      sum = std::accumulate(bottom_left.begin(), bottom_left.end(), 0.0);
+      avg = float(sum)/float(bottom_left.size());
+      //ROS_INFO("Bottom left: %f", avg);
+      corners_averages.data.push_back(avg);
+
+      sum = std::accumulate(bottom_right.begin(), bottom_right.end(), 0.0);
+      avg = float(sum)/float(bottom_right.size());
+      //ROS_INFO("Bottom right: %f", avg);
+      corners_averages.data.push_back(avg);
+
+      pub_corners_averge_.publish(corners_averages);
 
       if (z_offset_mm_ != 0)
       {

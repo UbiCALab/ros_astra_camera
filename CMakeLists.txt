@@ -4,6 +4,8 @@ project(astra_camera)
 find_package(catkin REQUIRED camera_info_manager dynamic_reconfigure image_transport  nodelet sensor_msgs roscpp message_generation)
 
 find_package(Boost REQUIRED COMPONENTS system thread)
+find_package(OpenCV REQUIRED)
+find_package(cv_bridge REQUIRED)
 
 option(FILTER "OB Filter library" ON)
 
@@ -60,7 +62,7 @@ add_library(astra_wrapper
    src/astra_video_mode.cpp
 )
 target_link_libraries(astra_wrapper ${catkin_LIBRARIES} -lOpenNI2Orbbec
-  ${Boost_LIBRARIES} )
+  ${Boost_LIBRARIES} ${OpenCV_LIBS} ${cv_bridge_LIBRARIES} )
 add_dependencies(astra_wrapper astra_openni2 ${PROJECT_NAME}_generate_messages_cpp)
 
 add_library(astra_driver_lib
