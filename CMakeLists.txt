@@ -5,6 +5,8 @@ find_package(catkin REQUIRED camera_info_manager dynamic_reconfigure image_trans
 
 find_package(Boost REQUIRED COMPONENTS system thread)
 
+find_package(OpenCV REQUIRED COMPONENTS imgproc highgui core)
+
 option(FILTER "OB Filter library" ON)
 
 if( ${FILTER} STREQUAL "ON" )
@@ -66,7 +68,7 @@ add_dependencies(astra_wrapper astra_openni2 ${PROJECT_NAME}_generate_messages_c
 add_library(astra_driver_lib
                 src/astra_driver.cpp
 )
-target_link_libraries(astra_driver_lib astra_wrapper ${catkin_LIBRARIES} ${Boost_LIBRARIES} )
+target_link_libraries(astra_driver_lib astra_wrapper ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
 add_dependencies(astra_driver_lib astra_openni2 ${PROJECT_NAME}_gencfg ${PROJECT_NAME}_generate_messages_cpp)
 
 add_library(astra_camera_nodelet
